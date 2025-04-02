@@ -19,44 +19,81 @@
 
 ## 构建要求
 
-- CMake 3.12+
-- 支持C++17的编译器
+- Python 3.x
+- SCons 4.0+
 - Godot 4.4
 - Android NDK (用于Android构建)
 - Xcode (用于iOS构建)
+- Docker (用于构建LiteRT)
+- Bazel (用于构建LiteRT)
 
 ### 外部依赖
 
-- OpenCV-mobile
-- LiteRT
-- godot-cpp (Godot 4.4)
+- OpenCV-mobile (预编译)
+- LiteRT (从源代码构建)
+- godot-cpp (源代码，通过git submodule管理)
+
+## 依赖设置
+
+项目使用自动化脚本管理依赖。运行以下命令设置所有依赖：
+
+```bash
+# 安装Python依赖
+pip install scons
+
+# 安装Docker和Bazel
+# Ubuntu/Debian:
+sudo apt-get update
+sudo apt-get install -y docker.io bazel
+sudo usermod -aG docker $USER
+
+# macOS:
+brew install docker docker-compose bazel
+
+# Windows:
+# 安装Docker Desktop和Chocolatey，然后：
+choco install bazel
+
+# 设置项目依赖
+python scripts/setup_dependencies.py
+```
+
+此脚本会：
+1. 克隆并设置godot-cpp子模块
+2. 下载并解压OpenCV-mobile预编译库
+3. 克隆并构建LiteRT（使用Docker和Bazel）
+
+### LiteRT构建说明
+
+LiteRT使用Docker容器进行构建，确保构建环境的一致性。构建过程包括：
+1. 克隆LiteRT仓库
+2. 初始化子模块
+3. 构建Docker镜像
+4. 在容器中构建LiteRT
+5. 复制构建产物到正确位置
 
 ## 编译步骤
 
-### Android
+### Android构建
 
 ```bash
-mkdir -p build/android
-cd build/android
-cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake \
-      -DANDROID_ABI=arm64-v8a \
-      -DCMAKE_BUILD_TYPE=Release \
-      ../..
-make -j8
+# 设置Android NDK路径
+export ANDROID_NDK_ROOT=/path/to/android-ndk
+
+# 构建
+scons platform=android
 ```
 
-### iOS
+### iOS构建
 
 ```bash
-mkdir -p build/ios
-cd build/ios
-cmake -GXcode \
-      -DCMAKE_SYSTEM_NAME=iOS \
-      -DCMAKE_OSX_ARCHITECTURES=arm64 \
-      -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-      -DCMAKE_BUILD_TYPE=Release \
-      ../..
-xcodebuild -project DiffDetectorGDExtension.xcodeproj -configuration Release -sdk iphoneos
+scons platform=ios
+```
+
+### Windows构建
+
+```bash
+scons platform=windows
 ```
 
 ## 使用方法
@@ -116,5 +153,5 @@ DiffGenerator提供以下差异算法类型：
 ## 致谢
 
 - OpenCV-mobile: https://github.com/nihui/opencv-mobile
-- LiteRT: 用于移动设备的轻量级深度学习推理引擎
+- LiteRT: https://github.com/google-ai-edge/LiteRT
 - YOLOv11: 最新的目标检测与分割模型 

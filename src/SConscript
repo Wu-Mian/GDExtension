@@ -1,0 +1,12 @@
+Import('env')
+
+# 源文件
+sources = [
+    'register_types.cpp',
+    'diff_detector.cpp',
+    'yolo_detector.cpp',
+    'diff_generator.cpp'
+]
+
+# 返回源文件列表
+Return('sources') 

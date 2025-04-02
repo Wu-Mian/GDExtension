@@ -1,0 +1,287 @@
+name: 构建 DiffDetector GDExtension
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: 安装 SCons
+      run: |
+        python -m pip install --upgrade pip
+        pip install scons
+    
+    - name: 安装 Android NDK
+      run: |
+        wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+        unzip android-ndk-r25c-linux.zip
+        echo "ANDROID_NDK=$PWD/android-ndk-r25c" >> $GITHUB_ENV
+    
+    - name: 安装 Docker
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        sudo usermod -aG docker $USER
+        # 确保Docker守护进程运行
+        sudo systemctl start docker
+        # 验证Docker安装
+        docker --version
+    
+    - name: 安装 Bazel
+      run: |
+        curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
+        sudo mv bazel.gpg /etc/apt/trusted.gpg.d/
+        echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+        sudo apt-get update
+        sudo apt-get install -y bazel
+    
+    - name: 设置依赖
+      run: |
+        python scripts/setup_dependencies.py --platform=android
+    
+    - name: 构建 Android 版本
+      run: |
+        export ANDROID_NDK_ROOT=$ANDROID_NDK
+        scons --platform=android
+
+  build-ios:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: 安装 SCons
+      run: |
+        python -m pip install --upgrade pip
+        pip install scons
+    
+    - name: 安装 Docker
+      run: |
+        brew install docker
+        brew install docker-compose
+        # 启动Docker服务
+        colima start
+        # 验证Docker安装
+        docker --version
+    
+    - name: 安装 Bazel
+      run: |
+        brew install bazel
+    
+    - name: 设置依赖
+      run: |
+        python scripts/setup_dependencies.py --platform=ios
+    
+    - name: 构建 iOS 版本
+      run: scons --platform=ios
+    
+    - name: 创建 iOS 框架结构
+      run: |
+        mkdir -p bin/ios/DiffDetectorGDExtension.framework
+        cp bin/ios/libDiffDetectorGDExtension.*.dylib bin/ios/DiffDetectorGDExtension.framework/
+        # 创建 Info.plist 文件，iOS要求此文件与.dylib在同一目录
+        cat > bin/ios/DiffDetectorGDExtension.framework/Info.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>DiffDetectorGDExtension</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.example.DiffDetectorGDExtension</string>
+            <key>CFBundleName</key>
+            <string>DiffDetectorGDExtension</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+        </dict>
+        </plist>
+        EOF
+    
+    - name: iOS 签名
+      if: ${{ env.APPLE_CERT_BASE64 != '' }}
+      env:
+        APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+        APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        APPLE_DEV_ID: ${{ secrets.APPLE_DEV_ID }}
+        APPLE_DEV_TEAM_ID: ${{ secrets.APPLE_DEV_TEAM_ID }}
+        APPLE_DEV_PASSWORD: ${{ secrets.APPLE_DEV_PASSWORD }}
+        APPLE_DEV_APP_ID: ${{ secrets.APPLE_DEV_APP_ID }}
+      run: |
+        # 创建临时证书文件
+        echo $APPLE_CERT_BASE64 | base64 --decode > certificate.p12
+        
+        # 创建钥匙串
+        security create-keychain -p "password" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "password" build.keychain
+        
+        # 导入证书
+        security import certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+        
+        # 设置签名参数
+        security set-key-partition-list -S apple-tool:,apple: -s -k "password" build.keychain
+        
+        # 签名框架
+        /usr/bin/codesign --force -s "$APPLE_DEV_APP_ID" --keychain build.keychain bin/ios/DiffDetectorGDExtension.framework -v
+        
+        # 清理临时文件
+        rm certificate.p12
+
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: 安装 SCons
+      run: |
+        python -m pip install --upgrade pip
+        pip install scons
+    
+    - name: 安装 Docker
+      run: |
+        brew install docker
+        brew install docker-compose
+        # 启动Docker服务
+        colima start
+        # 验证Docker安装
+        docker --version
+    
+    - name: 安装 Bazel
+      run: |
+        brew install bazel
+    
+    - name: 设置依赖
+      run: |
+        python scripts/setup_dependencies.py --platform=macos
+    
+    - name: 构建 macOS 版本
+      run: scons --platform=macos
+    
+    - name: 创建 macOS 框架结构
+      run: |
+        mkdir -p bin/macos/DiffDetectorGDExtension.framework/Resources
+        cp bin/macos/libDiffDetectorGDExtension.*.dylib bin/macos/DiffDetectorGDExtension.framework/DiffDetectorGDExtension
+        # 创建 Resources/Info.plist 文件，macOS要求此文件在Resources目录下
+        cat > bin/macos/DiffDetectorGDExtension.framework/Resources/Info.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>DiffDetectorGDExtension</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.example.DiffDetectorGDExtension</string>
+            <key>CFBundleName</key>
+            <string>DiffDetectorGDExtension</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+        </dict>
+        </plist>
+        EOF
+    
+    - name: macOS 签名
+      if: ${{ env.APPLE_CERT_BASE64 != '' }}
+      env:
+        APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+        APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        APPLE_DEV_ID: ${{ secrets.APPLE_DEV_ID }}
+        APPLE_DEV_TEAM_ID: ${{ secrets.APPLE_DEV_TEAM_ID }}
+        APPLE_DEV_PASSWORD: ${{ secrets.APPLE_DEV_PASSWORD }}
+        APPLE_DEV_APP_ID: ${{ secrets.APPLE_DEV_APP_ID }}
+      run: |
+        # 创建临时证书文件
+        echo $APPLE_CERT_BASE64 | base64 --decode > certificate.p12
+        
+        # 创建钥匙串
+        security create-keychain -p "password" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "password" build.keychain
+        
+        # 导入证书
+        security import certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+        
+        # 设置签名参数
+        security set-key-partition-list -S apple-tool:,apple: -s -k "password" build.keychain
+        
+        # 签名框架
+        /usr/bin/codesign --force -s "$APPLE_DEV_APP_ID" --keychain build.keychain bin/macos/DiffDetectorGDExtension.framework -v
+        
+        # 清理临时文件
+        rm certificate.p12
+
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: 安装 SCons
+      run: |
+        python -m pip install --upgrade pip
+        pip install scons
+    
+    - name: 安装 Docker Desktop
+      uses: docker/setup-buildx-action@v2
+    
+    - name: 安装 Bazel
+      run: |
+        choco install bazel
+    
+    - name: 设置依赖
+      run: |
+        python scripts/setup_dependencies.py --platform=windows
+    
+    - name: 构建 Windows 版本
+      run: scons --platform=windows 
