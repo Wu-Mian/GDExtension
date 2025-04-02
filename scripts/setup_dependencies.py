@@ -32,14 +32,14 @@ def setup_opencv_mobile():
     
     # 下载预编译的OpenCV-mobile
     if build_platform == "windows":
-        url = "https://github.com/nihui/opencv-mobile/releases/download/v4.8.0/opencv-mobile-4.8.0-windows.zip"
+        url = "https://github.com/nihui/opencv-mobile/releases/latest/download/opencv-mobile-4.11.0-windows-vs2022.zip"
     elif build_platform == "ios":
-        url = "https://github.com/nihui/opencv-mobile/releases/download/v4.8.0/opencv-mobile-4.8.0-ios.zip"
+        url = "https://github.com/nihui/opencv-mobile/releases/download/v32/opencv-mobile-4.11.0-ios.zip"
     elif build_platform == "macos":
         # 对于macOS，我们也使用iOS版本，然后做必要的调整
-        url = "https://github.com/nihui/opencv-mobile/releases/download/v4.8.0/opencv-mobile-4.8.0-ios.zip"
+        url = "https://github.com/nihui/opencv-mobile/releases/download/v32/opencv-mobile-4.11.0-macos.zip"
     else:  # android
-        url = "https://github.com/nihui/opencv-mobile/releases/download/v4.8.0/opencv-mobile-4.8.0-android.zip"
+        url = "https://github.com/nihui/opencv-mobile/releases/download/v32/opencv-mobile-4.11.0-android.zip"
     
     download_file(url, "opencv-mobile.zip")
     
