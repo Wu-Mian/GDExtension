@@ -1,0 +1,15 @@
+[configuration]
+entry_symbol = "diff_detector_library_init"
+compatibility_minimum = "4.4"
+
+[libraries]
+android.debug.arm64 = "res://bin/android/libDiffDetectorGDExtension.so"
+android.release.arm64 = "res://bin/android/libDiffDetectorGDExtension.so"
+ios.debug = "res://bin/ios/libDiffDetectorGDExtension.a"
+ios.release = "res://bin/ios/libDiffDetectorGDExtension.a"
+
+[dependencies]
+android.debug.arm64 = {"res://bin/android/assets/yolo11s-seg_float16.tflite": ""}
+android.release.arm64 = {"res://bin/android/assets/yolo11s-seg_float16.tflite": ""}
+ios.debug = {"res://bin/ios/assets/yolo11s-seg_float16.tflite": ""}
+ios.release = {"res://bin/ios/assets/yolo11s-seg_float16.tflite": ""} 
