@@ -77,53 +77,32 @@ def setup_litert():
         run_command("git submodule init")
         run_command("git submodule update --remote")
         
-        # 构建Docker镜像
-        run_command("docker build . -t tflite-builder -f ci/tflite-py3.Dockerfile")
-        
         # 创建lib目录
         os.makedirs("lib", exist_ok=True)
         
-        # 根据平台设置构建参数
+        # 直接使用系统安装的Bazel构建，不使用Docker
         if build_platform == "windows":
+            # Windows平台使用Bazel构建
             build_cmd = "bazel build //tflite:libtensorflowlite.so --config=windows"
-            mount_path = os.path.abspath(".").replace("\\", "/")
-            cache_path = os.path.expanduser("~/.cache/bazel").replace("\\", "/")
-            docker_cmd = f"docker run -v {mount_path}:/host_dir -v {cache_path}:/root/.cache/bazel tflite-builder bash -c 'cd /host_dir && {build_cmd}'"
-            
-            # 在Docker容器中构建（非交互式模式，适合CI环境）
-            run_command(docker_cmd)
-            
-            # 复制构建产物
+            run_command(build_cmd)
             shutil.copy("bazel-bin/tflite/libtensorflowlite.so", "lib/libtensorflowlite.dll")
             
         elif build_platform == "ios":
+            # iOS平台使用Bazel构建
             build_cmd = "bazel build //tflite:libtensorflowlite.so --config=ios"
-            docker_cmd = f"docker run -v $PWD:/host_dir -v $HOME/.cache/bazel:/root/.cache/bazel tflite-builder bash -c 'cd /host_dir && {build_cmd}'"
-            
-            # 在Docker容器中构建（非交互式模式，适合CI环境）
-            run_command(docker_cmd)
-            
-            # 复制构建产物
+            run_command(build_cmd)
             shutil.copy("bazel-bin/tflite/libtensorflowlite.so", "lib/libtensorflowlite.dylib")
             
         elif build_platform == "macos":
+            # macOS平台使用Bazel构建
             build_cmd = "bazel build //tflite:libtensorflowlite.so --config=macos"
-            docker_cmd = f"docker run -v $PWD:/host_dir -v $HOME/.cache/bazel:/root/.cache/bazel tflite-builder bash -c 'cd /host_dir && {build_cmd}'"
-            
-            # 在Docker容器中构建（非交互式模式，适合CI环境）
-            run_command(docker_cmd)
-            
-            # 复制构建产物
+            run_command(build_cmd)
             shutil.copy("bazel-bin/tflite/libtensorflowlite.so", "lib/libtensorflowlite.dylib")
             
         else:  # android
+            # Android平台使用Bazel构建
             build_cmd = "bazel build //tflite:libtensorflowlite.so --config=android"
-            docker_cmd = f"docker run -v $PWD:/host_dir -v $HOME/.cache/bazel:/root/.cache/bazel tflite-builder bash -c 'cd /host_dir && {build_cmd}'"
-            
-            # 在Docker容器中构建（非交互式模式，适合CI环境）
-            run_command(docker_cmd)
-            
-            # 复制构建产物
+            run_command(build_cmd)
             shutil.copy("bazel-bin/tflite/libtensorflowlite.so", "lib/libtensorflowlite.so")
         
         os.chdir("..")

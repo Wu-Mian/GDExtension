@@ -11,6 +11,7 @@ AddOption('--platform',
         help='指定目标平台: windows, macos, ios, android')
 
 platform = GetOption('platform')
+
 if platform is None:
     if sys.platform == 'win32':
         platform = 'windows'

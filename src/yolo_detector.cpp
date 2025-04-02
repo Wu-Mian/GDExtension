@@ -1,34 +1,42 @@
 #include "yolo_detector.h"
-
-#include <godot_cpp/variant/utility_functions.hpp>
 #include <opencv2/imgproc.hpp>
-#include <litert/nn/tflite/yolov5.h>
+#include <stdexcept>
 
 namespace godot {
 
 YoloDetector::YoloDetector() 
-    : is_initialized(false),
-      confidence_threshold(0.5f),
-      nms_threshold(0.45f) {
+    : is_initialized(false), 
+      confidence_threshold(0.25f), 
+      nms_threshold(0.45f) 
+{
+    // 在构造函数中初始化智能指针
+    model = std::make_unique<litert::TFLiteModel>();
 }
 
 YoloDetector::~YoloDetector() {
-    // 智能指针会自动清理
+    // 析构函数会自动处理释放资源
 }
 
-bool YoloDetector::initialize(const std::string& model_file) {
+bool YoloDetector::initialize(const std::string& model_path) {
+    // 已经初始化则返回true
+    if (is_initialized) {
+        return true;
+    }
+    
     try {
-        // 初始化YOLOv11模型 (使用YOLOv5接口，因为LiteRT内部处理兼容)
-        yolo_detector = std::make_unique<lite::nn::tflite::YoloV5>(model_file);
+        // 加载YOLOv11模型
+        if (!model->loadModel(model_path)) {
+            return false;
+        }
         
-        // 设置阈值参数
-        yolo_detector->set_conf_thresh(confidence_threshold);
-        yolo_detector->set_nms_thresh(nms_threshold);
+        // 设置模型参数
+        model->setConfidenceThreshold(confidence_threshold);
+        model->setNMSThreshold(nms_threshold);
         
         is_initialized = true;
         return true;
     } catch (const std::exception& e) {
-        godot::UtilityFunctions::print_error("YoloDetector initialization failed: ", e.what());
+        // 捕获并记录异常
         is_initialized = false;
         return false;
     }
@@ -36,51 +44,60 @@ bool YoloDetector::initialize(const std::string& model_file) {
 
 bool YoloDetector::detect(const cv::Mat& image) {
     if (!is_initialized) {
-        godot::UtilityFunctions::print_error("YoloDetector not initialized");
         return false;
     }
     
     try {
-        // 清除上一次的检测结果
-        last_detections.clear();
+        // 清除之前的检测结果
+        detections.clear();
         
-        // 运行推理
-        auto infer_results = yolo_detector->detect(image);
+        // 执行模型推理
+        if (!model->inference(image.data, image.total() * image.elemSize())) {
+            return false;
+        }
         
-        // 转换结果格式为我们的DetectedObject结构
-        for (const auto& res : infer_results) {
+        // 获取检测结果
+        auto results = model->getDetectionResults();
+        
+        // 将模型结果转换为DetectedObject结构
+        for (const auto& result : results) {
             DetectedObject obj;
-            obj.class_id = res.label_id;
-            obj.confidence = res.confidence;
+            obj.class_id = result.class_id;
+            obj.confidence = result.confidence;
+            obj.bounding_box = cv::Rect(
+                result.x, 
+                result.y, 
+                result.width, 
+                result.height
+            );
             
-            // 边界框
-            obj.bbox = cv::Rect(res.bbox.x, res.bbox.y, res.bbox.width, res.bbox.height);
-            
-            // 分割点
-            if (!res.segmentation.points.empty()) {
-                for (const auto& point : res.segmentation.points) {
-                    obj.segment.push_back(cv::Point(point.x, point.y));
-                }
+            // 转换分割点
+            obj.points.reserve(result.segmentation_points.size() / 2);
+            for (size_t i = 0; i < result.segmentation_points.size(); i += 2) {
+                obj.points.emplace_back(
+                    result.segmentation_points[i], 
+                    result.segmentation_points[i + 1]
+                );
             }
             
-            last_detections.push_back(obj);
+            detections.push_back(obj);
         }
         
         return true;
     } catch (const std::exception& e) {
-        godot::UtilityFunctions::print_error("YoloDetector detection failed: ", e.what());
+        // 捕获并记录异常
         return false;
     }
 }
 
-const std::vector<DetectedObject>& YoloDetector::get_detections() const {
-    return last_detections;
+std::vector<DetectedObject> YoloDetector::get_detections() const {
+    return detections;
 }
 
 void YoloDetector::set_confidence_threshold(float threshold) {
     confidence_threshold = threshold;
     if (is_initialized) {
-        yolo_detector->set_conf_thresh(confidence_threshold);
+        model->setConfidenceThreshold(threshold);
     }
 }
 
@@ -91,7 +108,7 @@ float YoloDetector::get_confidence_threshold() const {
 void YoloDetector::set_nms_threshold(float threshold) {
     nms_threshold = threshold;
     if (is_initialized) {
-        yolo_detector->set_nms_thresh(nms_threshold);
+        model->setNMSThreshold(threshold);
     }
 }
 
@@ -100,34 +117,22 @@ float YoloDetector::get_nms_threshold() const {
 }
 
 void YoloDetector::draw_detections(cv::Mat& image) {
-    if (last_detections.empty()) {
-        return;
-    }
-    
-    for (const auto& obj : last_detections) {
-        // 画边界框
-        cv::rectangle(image, obj.bbox, cv::Scalar(0, 255, 0), 2);
+    // 在图像上绘制检测结果，用于调试
+    for (const auto& det : detections) {
+        // 绘制边界框
+        cv::rectangle(image, det.bounding_box, cv::Scalar(0, 255, 0), 2);
         
-        // 画分割区域
-        if (obj.segment.size() > 2) {
-            std::vector<std::vector<cv::Point>> contours;
-            contours.push_back(obj.segment);
-            cv::drawContours(image, contours, 0, cv::Scalar(0, 0, 255), 2);
-        }
+        // 绘制分割轮廓
+        std::vector<std::vector<cv::Point>> contours;
+        contours.push_back(det.points);
+        cv::drawContours(image, contours, 0, cv::Scalar(0, 0, 255), 2);
         
-        // 绘制置信度文本
-        std::string label = "Conf: " + std::to_string(obj.confidence).substr(0, 4);
-        int font_face = cv::FONT_HERSHEY_SIMPLEX;
-        double font_scale = 0.5;
-        int thickness = 1;
-        cv::Size text_size = cv::getTextSize(label, font_face, font_scale, thickness, 0);
-        cv::Point text_org(obj.bbox.x, obj.bbox.y - 5);
-        
-        cv::rectangle(image, cv::Rect(text_org.x, text_org.y - text_size.height, 
-                                     text_size.width, text_size.height + 5),
-                     cv::Scalar(0, 255, 0), -1);
-        cv::putText(image, label, text_org, font_face, font_scale, 
-                   cv::Scalar(0, 0, 0), thickness);
+        // 绘制置信度文字
+        std::string text = "Class " + std::to_string(det.class_id) + 
+                          " (" + std::to_string(int(det.confidence * 100)) + "%)";
+        cv::putText(image, text, 
+                   cv::Point(det.bounding_box.x, det.bounding_box.y - 10),
+                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
     }
 }
 
