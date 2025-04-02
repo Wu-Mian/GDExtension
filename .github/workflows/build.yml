@@ -50,6 +50,12 @@ jobs:
       run: |
         python scripts/setup_dependencies.py --platform=android
     
+    - name: 手动构建 godot-cpp
+      run: |
+        cd godot-cpp
+        scons target=template_release generate_bindings=yes platform=android android_ndk_root=$ANDROID_NDK
+        cd ..
+    
     - name: 构建 Android 版本
       run: |
         export ANDROID_NDK_ROOT=$ANDROID_NDK
@@ -87,6 +93,12 @@ jobs:
     - name: 设置依赖
       run: |
         python scripts/setup_dependencies.py --platform=ios
+    
+    - name: 手动构建 godot-cpp
+      run: |
+        cd godot-cpp
+        scons target=template_release generate_bindings=yes platform=ios
+        cd ..
     
     - name: 构建 iOS 版本
       run: scons --platform=ios
@@ -178,6 +190,12 @@ jobs:
       run: |
         python scripts/setup_dependencies.py --platform=macos
     
+    - name: 手动构建 godot-cpp
+      run: |
+        cd godot-cpp
+        scons target=template_release generate_bindings=yes platform=macos
+        cd ..
+    
     - name: 构建 macOS 版本
       run: scons --platform=macos
     
@@ -267,6 +285,12 @@ jobs:
     - name: 设置依赖
       run: |
         python scripts/setup_dependencies.py --platform=windows
+    
+    - name: 手动构建 godot-cpp
+      run: |
+        cd godot-cpp
+        scons target=template_release generate_bindings=yes platform=windows
+        cd ..
     
     - name: 构建 Windows 版本
       run: scons --platform=windows 

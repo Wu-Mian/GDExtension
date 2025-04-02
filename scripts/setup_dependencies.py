@@ -20,9 +20,7 @@ def setup_godot_cpp():
     if not os.path.exists("godot-cpp"):
         run_command("git submodule add https://github.com/godotengine/godot-cpp.git")
         run_command("git submodule update --init --recursive")
-        os.chdir("godot-cpp")
-        run_command("python SConscript.py generate-bindings")
-        os.chdir("..")
+        # 不再尝试构建godot-cpp，这将在GitHub Actions工作流中单独处理
 
 def setup_opencv_mobile():
     print("设置 OpenCV-mobile...")
